@@ -158,6 +158,8 @@ class Dataset:
         if "outputpath" in datadict:
             self.outputpath = datadict["outputpath"]
 
+        self.video_col = datadict.get("NAME_COL", "video") 
+        print('Video column is set to:', self.video_col)
         # Check if a path to the ground truth foveation evaluation dataframe is provided.
         # If not, there should be the path to the files and a function to do this evaluation in a class method.
         if "gt_foveation_df" in datadict:
@@ -166,13 +168,13 @@ class Dataset:
             )
             if self.trainset:
                 self.train_foveation_df = self.gt_foveation_df[
-                    self.gt_foveation_df["video"].isin(self.trainset)
+                    self.gt_foveation_df[self.video_col].isin(self.trainset)
                 ]
             else:
                 self.train_foveation_df = pd.DataFrame()
             if self.testset:
                 self.test_foveation_df = self.gt_foveation_df[
-                    self.gt_foveation_df["video"].isin(self.testset)
+                    self.gt_foveation_df[self.video_col].isin(self.testset)
                 ]
             else:
                 self.test_foveation_df = pd.DataFrame()
@@ -188,7 +190,7 @@ class Dataset:
         if "gt_fovframes_nss_df" in datadict:
             self.gt_fovframes_nss_df = pd.read_csv(
                 self.PATH + datadict["gt_fovframes_nss_df"],
-                usecols=["frame", "x", "y", "subject", "video", "nss"],
+                usecols=["frame", "x", "y", "subject",  self.video_col, "nss"],
             )
         elif "eye_tracking_data" in datadict:
             self.gt_fovframes_nss_df = self.create_nss_df(datadict["eye_tracking_data"])
@@ -421,7 +423,7 @@ class Dataset:
         elif videos == "test":
             df_gtfov = self.test_foveation_df
         elif videos in self.used_videos:
-            df_gtfov = self.gt_foveation_df[self.gt_foveation_df["video"] == videos]
+            df_gtfov = self.gt_foveation_df[self.gt_foveation_df[self.video_col] == videos]
         else:
             df_gtfov = pd.DataFrame()
             raise Exception(
@@ -434,9 +436,17 @@ class Dataset:
         categories = ["B", "D", "I", "R"]
         ratios = {}
         full_dur = np.nansum(df_gtfov.duration_ms)
+        #original ScanDy-Data with fov_category column, ScanDy-PFC-Data with fov_cat column
+        if 'fov_category' in df_gtfov.columns:
+            cat_col = 'fov_category'
+        elif 'fov_cat' in df_gtfov.columns:
+            cat_col = 'fov_cat'
+        else:
+            raise KeyError("Neither 'subject' nor 'sub_id' column found in df_temp")
+
         for cat in categories:
             ratio = (
-                np.nansum(df_gtfov[df_gtfov["fov_category"] == cat].duration_ms)
+                np.nansum(df_gtfov[df_gtfov[cat_col] == cat].duration_ms)
                 / full_dur
             )
             ratios[cat] = ratio
@@ -453,12 +463,24 @@ class Dataset:
         ), "`result_df` is empty, make sure to run `evaluate_all_to_df` first!"
         fov_dur = np.sum(self.gt_foveation_df.duration_ms)
         full_dur = 0
-        for vid in set(self.gt_foveation_df["video"]):
+        for vid in set(self.gt_foveation_df[self.video_col]): #was video earlier
+            if vid not in self.video_frames:
+                # skip videos that are not part of the dataset, makes it possible to run with less
+                continue
             nframes = self.video_frames[vid]  # in case some videos are longer
-            df_temp = self.gt_foveation_df[self.gt_foveation_df["video"] == vid]
-            for s in set(df_temp["subject"]):
-                full_dur += nframes / self.FPS * 1000  # unit is ms!
+            df_temp = self.gt_foveation_df[self.gt_foveation_df[self.video_col] == vid]
+            #original ScanDy-Data with subject column, ScanDy-PFC-Data with subj-id column
+            if 'subject' in df_temp.columns:
+                subj_col = 'subject'
+            elif 'subj_id' in df_temp.columns:
+                subj_col = 'subj_id'
+            else:
+                raise KeyError("Neither 'subject' nor 'subj_id' column found in df_temp")
+
+            for s in df_temp[subj_col].dropna().unique():
+                            full_dur += nframes / self.FPS * 1000  # unit is ms!
         return fov_dur / full_dur
+
 
     #######################################################################
     ##########                NOT YET IMPLEMENTED                ##########
