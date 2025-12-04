@@ -67,7 +67,7 @@ class Dataset:
         ), f"PX_TO_DVA has to be provided as key in dataconfig!"
         self.PX_TO_DVA = datadict["PX_TO_DVA"]
         self.DVA_TO_PX = 1.0 / self.PX_TO_DVA
-
+        self.DATAFORMAT = datadict.get("dataformat", None)
         # Path to the data where all if stored in predefined schema (see below)
         assert (
             "PATH" in datadict
@@ -107,8 +107,7 @@ class Dataset:
         if "videoframes" in datadict:
             self.videoframes = datadict["videoframes"]
         else:
-            self.videoframes = f"{self.PATH}videos/"
-        # list of videos used for modeling, usually limited by nice segmentations
+            self.videoframes = f"{self.PATH}{self.DATAFORMAT}/"
         if "used_videos" in datadict:
             self.used_videos = datadict["used_videos"]
         else:
@@ -166,6 +165,13 @@ class Dataset:
             self.gt_foveation_df = pd.read_csv(
                 self.PATH + datadict["gt_foveation_df"]
             )
+            if self.DATAFORMAT is not None: 
+                if self.DATAFORMAT == 'video': 
+                    self.gt_foveation_df = self.gt_foveation_df[self.gt_foveation_df["video"] == 1]
+                elif self.DATAFORMAT == 'picture':
+                    self.gt_foveation_df = self.gt_foveation_df[self.gt_foveation_df["video"] == 0]
+                else: 
+                    pass
             if self.trainset:
                 self.train_foveation_df = self.gt_foveation_df[
                     self.gt_foveation_df[self.video_col].isin(self.trainset)
@@ -192,6 +198,7 @@ class Dataset:
                 self.PATH + datadict["gt_fovframes_nss_df"],
                 usecols=["frame", "x", "y", "subject",  self.video_col, "nss"],
             )
+            
         elif "eye_tracking_data" in datadict:
             self.gt_fovframes_nss_df = self.create_nss_df(datadict["eye_tracking_data"])
         else:
