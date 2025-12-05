@@ -22,7 +22,8 @@ class Dataset:
         * FPS: Frames per second of the videos
         * PX_TO_DVA: Conversion from pixels to degrees visual angle
         * gt_foveation_df: Dataframe with the ground truth scanpaths
-
+        * NAME_COL: Defines name of column including name of video/picture. Old sheets: 'video', newer: 'scene'
+        * dataformat: Set folder for input and filter human_data if both in sheet (newer: column 'video'; old: not given)
     The following information & paths are derived or set if not explicitely given(-> indicates how it is inferred):
         * videos: -> {PATH}videos/, original videos (only used for visualization)
         * featuremaps: -> {PATH}featuremaps/, maps for features (have subfolders for different feature extraction methods, like 'molin')
@@ -30,20 +31,29 @@ class Dataset:
         * flowmaps: -> {PATH}optical_flow/, Optical flow maps
         * nssmaps: -> {PATH}gt_fov_maps_333/, Ground truth fixation maps, normalized for calculating NSS
         * used_videos: -> names in objectmasks, list of videos used for modeling, usually limited by segmentations
-        * FRAMES_ALL_VIDS: -> objectmasks[used_videos].shape[0], Number of frames either given for all (int) or inferred for each (list)
+        * FRAMES_ALL_VIDS: -> objectmasks[used_videos].shape[0], Number of frames either given for all (int) or inferred for each (list); 
+                            for picture input necessary to set
         * VID_SIZE_Y, VID_SIZE_X: -> objectmasks[0].shape[1:] are assumed to be the same for all videos (for convenience).
         * video_frames: -> FRAMES_ALL_VIDS, Number of frames for each video (dict)
         * RADIUS_OBJ_GAZE: Tolerance radius of the object around the gaze point (in dva), default: 1.0
         * trainset: List of videos used for training, default: used_videos
         * testset: List of videos used for testing, default: None
         * gt_fovframes_nss_df: Dataframe with NSS values of the ground truth scanpaths, only needed if NSS is of interest
+
     """
 
     def __init__(self, dataconfig):
         """
         Load the important information from the provided dataset.
-        :param dataconfig: Dictionary that contains the most important info about the dataset.
-        :type dataconfig: dict or str (path to yaml file)
+
+        Parameters
+        ----------
+        dataconfig : dict or str
+            Dictionary containing dataset configuration, or a path to a YAML file.
+
+        Raises:
+            TypeError: If dataconfig is not dict or valid path
+            AssertionError: If required keys are missing
         """
         # load the dataconfig, either as dictionary or from a yaml file
         if isinstance(dataconfig, dict):
@@ -67,7 +77,7 @@ class Dataset:
         ), f"PX_TO_DVA has to be provided as key in dataconfig!"
         self.PX_TO_DVA = datadict["PX_TO_DVA"]
         self.DVA_TO_PX = 1.0 / self.PX_TO_DVA
-        self.DATAFORMAT = datadict.get("dataformat", None)
+        self.DATAFORMAT = datadict.get("dataformat", 'videos')
         # Path to the data where all if stored in predefined schema (see below)
         assert (
             "PATH" in datadict
@@ -127,8 +137,10 @@ class Dataset:
             }
         # get the video dimensions from the segmentation masks, if not provided
         if {"VID_SIZE_X", "VID_SIZE_Y"} <= set(datadict):
-            self.VID_SIZE_X = datadict["self.VID_SIZE_X"]
-            self.VID_SIZE_Y = datadict["self.VID_SIZE_Y"]
+            #self.VID_SIZE_X = datadict["self.VID_SIZE_X"]
+            #self.VID_SIZE_Y = datadict["self.VID_SIZE_Y"]
+            self.VID_SIZE_X = datadict["VID_SIZE_X"]
+            self.VID_SIZE_Y = datadict["VID_SIZE_Y"]
         else:
             masks = np.load(
                 f"{self.objectmasks}{self.used_videos[0]}.npy"
@@ -266,6 +278,10 @@ class Dataset:
             )
         elif os.path.exists(f"{self.featuremaps}{featuretype}/{videoname}.npy"):
             featuremaps = np.load(f"{self.featuremaps}{featuretype}/{videoname}.npy")
+        else:
+             raise FileNotFoundError(
+                 f"Feature maps not found: {self.featuremaps}{featuretype}/{videoname}.npy"
+             )
         if scalerange != [0,0]:
             # scale maps such that min is scalerange[0] and max is scalerange[1]
             featuremaps = (featuremaps - np.min(featuremaps)) / (np.max(featuremaps) - np.min(featuremaps))
@@ -389,7 +405,7 @@ class Dataset:
             # load single png using imageio
             vid = imageio.imread(f"{self.videoframes}{videoname}.{self.vid_ext}")
             nframes = self.video_frames[videoname]
-            vidlist = [vid] * nframes
+            vidlist = [vid.copy() for _ in range(nframes)]
         else:
             vid = imageio.get_reader(f"{self.videoframes}{videoname}.{self.vid_ext}", "ffmpeg")
             for image in vid.iter_data():
@@ -449,8 +465,7 @@ class Dataset:
         elif 'fov_cat' in df_gtfov.columns:
             cat_col = 'fov_cat'
         else:
-            raise KeyError("Neither 'subject' nor 'sub_id' column found in df_temp")
-
+            raise KeyError("Neither 'fov_category' nor 'fov_cat' column found in dataframe")
         for cat in categories:
             ratio = (
                 np.nansum(df_gtfov[df_gtfov[cat_col] == cat].duration_ms)
