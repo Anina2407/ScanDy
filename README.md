@@ -33,6 +33,8 @@ Adapted on images they can be found in:
 
 ## More information
 
+Read my report for more details about my findings and work. 
+
 ### The original Paper
 
 > Roth, N., Rolfs, M., Hellwich, O., & Obermayer, K. (2023). Objects guide human gaze behavior in dynamic real-world scenes. *PLOS Computational Biology* 19(10): e1011512.
