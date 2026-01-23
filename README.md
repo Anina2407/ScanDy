@@ -13,22 +13,13 @@ I used the original framework but adapted at for images usage and solved logical
 
 ## Introduction
 
-`ScanDy` is a modular and mechanistic computational framework for simulating realistic **scan**paths in **dy**namic real-world scenes. It is specifically designed to quantitatively test hypotheses about eye-movement behavior in videos.
-Specifically, it can be used to demonstrate the influence of object-representations on gaze behavior by comparing object-based and location-based models.
-
-For a visual guide of how `ScanDy` works, have a look at the [interactive notebook](examples/interactive_guide.ipynb) (also on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/interactive_guide.ipynb)) and the <a href="#examples">example usecases</a>.
+`ScanDy` is a modular and mechanistic computational framework for simulating realistic **scan**paths in **dy**namic real-world scenes. The model aims to simulate gaze behaviour analogous to measured eye-tracking data. While the model was developt based on eye-tracking data of young and healthy adults, this work tried to train the model also on PD patients, as well as age-matched humans. Goal is to find differences in Scanpathmodulation caused by age and/or dissease. 
 
 ## Dataset
 
-To prepare the dataset, we used the following resources:
+The used and preprocessed data can be found in: 
 
-* [VidCom](http://ilab.usc.edu/vagba/dataset/VidCom/) - Video and eye-tracking data
-* [deep_em_classifier](https://github.com/MikhailStartsev/deep_em_classifier/) - Eye movement classification
-* [detectron2](https://github.com/facebookresearch/detectron2/) - Frame-wise object segmentation
-* [deep_sort](https://github.com/nwojke/deep_sort/) - Object tracking
-* [dynamic-proto-object-saliency](https://github.com/csmslab/dynamic-proto-object-saliency/) - Low-level saliency maps
-* [TASED-Net](https://github.com/MichiganCOG/TASED-Net/) - High-level saliency maps
-* [PWC-Net](https://github.com/NVlabs/PWC-Net/) - Optical flow calculation
+Describtion of preprocessing can be found in: 
 
 ## Examples
 
@@ -38,6 +29,7 @@ The original examples from Nico can be still find in..
 * [Example 2](examples/ex2_model_comparison.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex2_model_comparison.ipynb): Evolutionary optimization of model parameters
 * [Example 3](examples/ex3_model_extension.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex3_model_extension.ipynb): Extending on existing models: Location-based model with object-based sensitivity
 
+Adapted on images they can be found in: 
 
 ## More information
 
