@@ -1,3 +1,6 @@
+This repository collects my work of the LabRotation that based on the Framework ScanDy from Nicolas Rothe (Roth et al., 2023). 
+I used the original framework but adapted at for images usage and solved logical and reusability issues. 
+
 <p align="center">
   <img src="https://github.com/rederoth/ScanDy/blob/main/docs/scandy_repo_card.png">
 </p>
@@ -7,8 +10,6 @@
   <a href="https://doi.org/10.1101/2023.03.14.532608">
     <img alt="paper" src="https://img.shields.io/badge/preprint-10.1101%2F2023.03.14.532608-blue"></a>    
 </p>
-<!-- # ScanDy
-Simulating Realistic Human Scanpaths in Dynamic Real-World Scenes -->
 
 ## Introduction
 
@@ -17,38 +18,7 @@ Specifically, it can be used to demonstrate the influence of object-representati
 
 For a visual guide of how `ScanDy` works, have a look at the [interactive notebook](examples/interactive_guide.ipynb) (also on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/interactive_guide.ipynb)) and the <a href="#examples">example usecases</a>.
 
-## Software architecture
-
-The structure of `ScanDy` is inspired by the `neurolib` framework, which is also used for parameter optimization and exploration.
-<p align="center">
-  <img src="https://github.com/rederoth/ScanDy/blob/main/docs/software_architecture.png">
-</p>
-Scanpath models inherit from the `Model` base class, whose functionality includes initializing and running model simulations and the evaluation and visualization of the resulting scanpaths. Models are implemented in a modular way, consiting of moules for (I) Scene features, (II) Visual sensitivity, (III) Scanpath history, (IV) Decision making, and (V) Gaze update.
-
-## Installation
-
-You can install `ScanDy` as pypi package using `pip`:
-
-```
-pip install scandy
-```
-
-We however reccomend that you clone (or fork) this repository and install all dependencies with
-
-```
-git clone https://github.com/rederoth/ScanDy.git
-cd ScanDy/
-pip install -r requirements.txt
-pip install .
-```
-
-This gives you more freedom to modify the existing models and run the examples.
-
-*CAVEAT*: There is currently an incompatability with Python 3.11 and the `numba` package (required by `neurolib`), see [numba/numba#8304](https://github.com/numba/numba/issues/8304). We therefore recommend using Python <=3.10 or manually installing `numba`/`neurolib`.
-
 ## Dataset
-
-The scanpath models require precomputed maps of the video data. We use the VidCom dataset (Li et al., 2011), for which we provide all the required data on OSF (https://www.doi.org/10.17605/OSF.IO/83XUC).
 
 To prepare the dataset, we used the following resources:
 
@@ -60,27 +30,19 @@ To prepare the dataset, we used the following resources:
 * [TASED-Net](https://github.com/MichiganCOG/TASED-Net/) - High-level saliency maps
 * [PWC-Net](https://github.com/NVlabs/PWC-Net/) - Optical flow calculation
 
-If you only want to play around with a single video, we uploaded a version of the dataset only containing the "field03" video to [Google drive](https://drive.google.com/file/d/1oT9OJ2tRsvdJGFFLSKDCaY3BJev4Irzf/view?usp=sharing).
-
 ## Examples
 
-We prepared a number of [IPython Notebooks](examples/) for you to explore the framework.
-
-To get started with `ScanDy`, have a look at our [interactive guide](examples/interactive_guide.ipynb), where you can explore the effect of individual model parameters.
-
-Additionally, we show instructive usecases, including:
+The original examples from Nico can be still find in..
 
 * [Example 1](examples/ex1_scanpath_sgl_video.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex1_scanpath_sgl_video.ipynb): Scanpath simulation and visualization for a single video
 * [Example 2](examples/ex2_model_comparison.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex2_model_comparison.ipynb): Evolutionary optimization of model parameters
 * [Example 3](examples/ex3_model_extension.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex3_model_extension.ipynb): Extending on existing models: Location-based model with object-based sensitivity
 
-All figures from our manuscript (Roth et al., 2023) can be reproduced with [this notebook](examples/manuscript_results.ipynb), which is also executable on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/manuscript_results.ipynb).
 
 ## More information
 
-### How to cite
+### The original Paper
 
-If `ScanDy` is useful for your research, please cite our paper:
 > Roth, N., Rolfs, M., Hellwich, O., & Obermayer, K. (2023). Objects guide human gaze behavior in dynamic real-world scenes. *PLOS Computational Biology* 19(10): e1011512.
 
 ```bibtex
@@ -96,17 +58,3 @@ If `ScanDy` is useful for your research, please cite our paper:
  pages = {1-39},
  number = {10},
 ```
-
-### Contact
-
- If you have feedback, questions, and/or ideas, feel free to send a [mail](mailto:roth@tu-berlin.de) to Nico.
-
-Nicolas Roth,
-PhD Student at Science of Intelligence;
-Neural Information Processing Group,
-Fakultaet IV, Technische Universitaet Berlin,
-MAR 5-6, Marchstr. 23, 10587 Berlin
-
-### Acknowledgments
-
-This work was funded by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) under Germany’s Excellence Strategy – EXC 2002/1 "Science of Intelligence" – project number 390523135.
