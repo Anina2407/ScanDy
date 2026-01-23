@@ -87,7 +87,7 @@ class LocationModel(Model):
         # Oculomotor drift
         par.drift_sig = self.Dataset.DVA_TO_PX / 8.0
         # Since optical flow somewhat carries object info, we might not want to use it here
-        par.use_flow = True
+        par.use_flow = False #True
         # The default LocationModel uses no objects, but we still allow it to
         # load objects here to make it easier to modify
         par.use_objects = False
