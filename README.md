@@ -21,7 +21,7 @@ The used and preprocessed data can be found in:
 
 Describtion of preprocessing can be found in: 
 
-## Examples
+## Examples for ScanDy (from (Roth et al., 2023))
 
 The original examples from Nico can be still find in..
 
@@ -30,6 +30,13 @@ The original examples from Nico can be still find in..
 * [Example 3](examples/ex3_model_extension.ipynb), on [Colab](https://colab.research.google.com/github/rederoth/ScanDy/blob/main/examples/ex3_model_extension.ipynb): Extending on existing models: Location-based model with object-based sensitivity
 
 Adapted on images they can be found in: 
+
+## Result structure
+Each folder includes the evol-file as well as a simulation on the top_3 parameter fits on test and traindata. 
+Additional analysing.ipynb creates afterwards a PDF summary also safed in the corresponding folder. 
+The pdf summary includes the model fit parameters and scores, the BDIR ratio comparision between model and humand data (train and test), as well as the BDIR timecourse comparision (tain and test) and a more detailed comparision of each BDIR category alone over time against the train data results (including RMSE). Additional for one scene (choosen as it has not so many objects make it easier to see something but can be changed) the percentage of each object (and background) are shown. Attention at this point, the naming is different in human data and model data (B and Ground is background and then no matter if the object has a name or is just named object the number are corresponding to the same object, e.g. plank_1 and Object_1 refers to the same objcet). 
+
+The evolution plot showing development of fit scores for each fit score over generation that is really helpfull to evaluate if the Algorithm settings is okay, isn't saved in the PDF but can be generated in analysing.ipynb as well. 
 
 ## More information
 
