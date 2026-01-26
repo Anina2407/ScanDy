@@ -1,9 +1,9 @@
-This repository collects my work of the LabRotation that based on the Framework ScanDy from Nicolas Rothe (Roth et al., 2023). <br>
+This repository collects my work of the LabRotation in the Neural Information Processing Group in Berlin by Prof. Obermayer (TU Berlin) and is based on and includes code from the original project: https://github.com/rederoth/ScanDy - Framework ScanDy from Nicolas Roth (Roth et al., 2023). <br>
 I used the original framework but adapted at for images usage and solved logical and reusability issues. 
 
 
 ## The Framework - ScanDy
-![differentmodules_on_pictures_slow](https://github.com/user-attachments/assets/438f8e6c-f885-48fb-9056-495049866f9e)
+![differentmodules_on_pictures_slow](https://github.com/user-attachments/assets/438f8e6c-f885-48fb-9056-495049866f9e) 
 
 `ScanDy` is a modular and mechanistic computational framework for simulating realistic **scan**paths in **dy**namic real-world scenes. The model aims to simulate gaze behaviour analogous to measured eye-tracking data. While the model was developt based on eye-tracking data of young and healthy adults, this work tried to train the model also on PD patients, as well as age-matched humans. Goal is to find differences in Scanpathmodulation caused by age and/or dissease. 
 
