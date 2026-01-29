@@ -11,6 +11,12 @@ test_hpc.ipynb
 *.zip
 *.sh
 
+# Ignore everything in sorted_results except directories and PDFs
+sorted_results/*
+!sorted_results/*/
+!sorted_results/**/*.pdf
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
