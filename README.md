@@ -9,7 +9,7 @@ I used the original framework but adapted at for images usage and solved logical
 
 ## Dataset
 
-The used and preprocessed eyetracking data can be found in: ![Pictures](https://github.com/Anina2407/ScanDy/tree/main/PictureExample/PictureExample_Resized/parkinson_data)<br>
+The used and preprocessed eyetracking data can be found in: ![Eyetracking-Data](https://github.com/Anina2407/ScanDy/tree/main/PictureExample/PictureExample_Resized/parkinson_data), all maps and used images are in ![Data](https://github.com/Anina2407/ScanDy/tree/main/PictureExample/PictureExample_Resized/)<br>
 Describtion of preprocessing can be found local under data\parkinson_data and is described in my report under preprocessing.
 
 ## Result structure
