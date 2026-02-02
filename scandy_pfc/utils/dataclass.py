@@ -4,7 +4,7 @@ import pandas as pd
 import imageio
 import yaml
 from skimage.transform import resize
-
+import gzip
 from .functions import anisotropic_centerbias
 
 
@@ -174,9 +174,18 @@ class Dataset:
         # Check if a path to the ground truth foveation evaluation dataframe is provided.
         # If not, there should be the path to the files and a function to do this evaluation in a class method.
         if "gt_foveation_df" in datadict:
+            file_path = self.PATH + datadict["gt_foveation_df"]
+            open_func = gzip.open if file_path.endswith(".gz") else open
+            with open_func(file_path, "rt", encoding="utf-8") as f:
+                first_line = f.readline()
+
+            sep = ';' if first_line.count(';') > first_line.count(',') else ','
+
             self.gt_foveation_df = pd.read_csv(
-                self.PATH + datadict["gt_foveation_df"]
+                file_path, sep=sep,
+                compression='gzip' if datadict["gt_foveation_df"].endswith('.gz') else None
             )
+            
             if self.DATAFORMAT is not None: 
                 if self.DATAFORMAT == 'video': 
                     self.gt_foveation_df = self.gt_foveation_df[self.gt_foveation_df["video"] == 1]
@@ -216,6 +225,9 @@ class Dataset:
         else:
             self.gt_fovframes_nss_df = None
 
+        self.human_start_positions = self.load_human_start_positions()
+        
+
     def load_yaml(self, path):
         """
         Load a yaml file into a dict.
@@ -244,13 +256,30 @@ class Dataset:
         if len(masks.shape) == 2: # input is only 2D, broadcast to 3D
             broadcasted_mask = np.broadcast_to(masks, (self.video_frames[videoname], masks.shape[0], masks.shape[1]))
             masks = broadcasted_mask
-        if masks.shape[1:] != (self.VID_SIZE_Y, self.VID_SIZE_X):
-                masks_resized = np.zeros(
-                    (masks.shape[0], self.VID_SIZE_Y, self.VID_SIZE_X), dtype=np.float32
-                )
-                for i in range(masks.shape[0]):
-                    masks_resized[i] = resize(masks[i], (self.VID_SIZE_Y, self.VID_SIZE_X))
-                masks = masks_resized
+            
+        if masks.ndim == 3 and masks.shape[0] != self.video_frames[videoname]:
+            # broadcast 1 frame to all frames
+            masks = np.broadcast_to(
+                masks,
+                (self.video_frames[videoname], masks.shape[1], masks.shape[2])
+            ).astype(np.float32)
+        # if masks.shape[1:] != (self.VID_SIZE_Y, self.VID_SIZE_X):
+        #         masks_resized = np.zeros(
+        #             (masks.shape[0], self.VID_SIZE_Y, self.VID_SIZE_X), dtype=np.float32
+        #         )
+        #         for i in range(masks.shape[0]):
+        #         # Use order=0 for nearest-neighbor interpolation to preserve discrete object IDs
+        #             masks_resized[i] = resize(
+        #                 masks[i], 
+        #                 (self.VID_SIZE_Y, self.VID_SIZE_X),
+        #                 order=0,  # Nearest-neighbor interpolation
+        #                 preserve_range=True,  # Don't normalize to [0,1]
+        #                 anti_aliasing=False  # No smoothing
+        #             )
+        #             masks = masks_resized
+        #         # for i in range(masks.shape[0]):
+        #         #     masks_resized[i] = resize(masks[i], (self.VID_SIZE_Y, self.VID_SIZE_X))
+        #         # masks = masks_resized
         assert masks.shape == (
             self.video_frames[videoname],
             self.VID_SIZE_Y,
@@ -271,60 +300,84 @@ class Dataset:
         :type centerbias: np.ndarray or str, optional
         :return: Feature maps of shape (frames, VID_SIZE_Y, VID_SIZE_X)
         :rtype: np.ndarray
+        :param offset: Additive offset applied before normalization to flatten peaks
+        :type offset: float, optional
         """
+        is_uniform = False
+        
         if featuretype in set((None, "None")):
             featuremaps = 0.5 * np.ones(
                 (self.video_frames[videoname], self.VID_SIZE_Y, self.VID_SIZE_X)
             )
+            is_uniform = True
         elif os.path.exists(f"{self.featuremaps}{featuretype}/{videoname}.npy"):
             featuremaps = np.load(f"{self.featuremaps}{featuretype}/{videoname}.npy")
         else:
              raise FileNotFoundError(
                  f"Feature maps not found: {self.featuremaps}{featuretype}/{videoname}.npy"
              )
+
         if scalerange != [0,0]:
             # scale maps such that min is scalerange[0] and max is scalerange[1]
             featuremaps = (featuremaps - np.min(featuremaps)) / (np.max(featuremaps) - np.min(featuremaps))
             featuremaps = featuremaps * (scalerange[1] - scalerange[0]) + scalerange[0]
-        if normalized_std != 0:
+
+        if normalized_std != 0 and not is_uniform:
             featuremaps = featuremaps.astype(np.float32)
-            featuremaps = (featuremaps - np.mean(featuremaps)) / np.std(featuremaps) 
-            featuremaps = np.clip(featuremaps * normalized_std + 1, 0, None)
+    
+        # Normalize to [0, 1] range
+        fmin = np.min(featuremaps)
+        fmax = np.max(featuremaps)
+        if fmax - fmin < 1e-10:
+            print(f"No variation in feature maps. Skipping normalization.")
+        else:
+            featuremaps = (featuremaps - fmin) / (fmax - fmin)  # Now in [0, 1]
+            featuremaps = featuremaps * normalized_std + (1 - normalized_std) * 0.5
+
+        # Old implementation: 
+        # if normalized_std != 0 and not is_uniform:
+        #     featuremaps = featuremaps.astype(np.float32)
+        #     std_val = np.std(featuremaps)
+        #     if std_val < 1e-10:
+        #         print(f"Standard deviation of feature maps for video {videoname} is too small ({std_val}). Skipping normalization.")
+        #     else: 
+        #         featuremaps = (featuremaps - np.mean(featuremaps)) / np.std(featuremaps) 
+        #         featuremaps = np.clip(featuremaps * normalized_std + 1, 0, None)
             
         if featuremaps.ndim == 2:  # only (y, x)
             featuremaps = np.broadcast_to(
                 featuremaps[np.newaxis, :, :],
                 (self.video_frames[videoname], featuremaps.shape[0], featuremaps.shape[1])
             ).astype(np.float32)
-        if featuremaps.ndim == 3:
-             if featuremaps.shape[1:] != (self.VID_SIZE_Y, self.VID_SIZE_X):
-                featuremaps_resized = np.zeros(
-                    (featuremaps.shape[0], self.VID_SIZE_Y, self.VID_SIZE_X), dtype=np.float32
-                )
-                for i in range(featuremaps.shape[0]):
-                    featuremaps_resized[i] = resize(featuremaps[i], (self.VID_SIZE_Y, self.VID_SIZE_X))
-                featuremaps = featuremaps_resized
-        print(f"VID_SIZE_Y={self.VID_SIZE_Y}, VID_SIZE_X={self.VID_SIZE_X}")
-        print(f"Feature maps shape: {featuremaps.shape}")
-        print(f"Expected frames: {self.video_frames[videoname]}")
+       
+        if featuremaps.ndim == 3 and featuremaps.shape[0] != self.video_frames[videoname]:
+            # broadcast 1 frame to all frames
+            featuremaps = np.broadcast_to(
+                featuremaps,
+                (self.video_frames[videoname], featuremaps.shape[1], featuremaps.shape[2])
+            ).astype(np.float32)
+        #print(f"VID_SIZE_Y={self.VID_SIZE_Y}, VID_SIZE_X={self.VID_SIZE_X}")
+        #print(f"Feature maps shape: {featuremaps.shape}")
+        #print(f"Expected frames: {self.video_frames[videoname]}")
         assert featuremaps.shape == (
             self.video_frames[videoname],
             self.VID_SIZE_Y,
             self.VID_SIZE_X,
-        ), "Feature maps are not in shape (f,y,x)!"
+        ), f"Feature maps are not in shape (f,y,x)! But in shape: {featuremaps.shape} and {self.video_frames[videoname]}, {self.VID_SIZE_Y},{self.VID_SIZE_X}"
+     
         if centerbias is None:
-            return featuremaps
+            return np.clip(featuremaps, 0, None)
         elif centerbias == "anisotropic_default":
-            return featuremaps * anisotropic_centerbias(
+            return np.clip(featuremaps * anisotropic_centerbias(
                 self.VID_SIZE_X, self.VID_SIZE_Y
-            )
+            ), 0, None)
         # elif: Implement other keywords?!
         else:
             assert centerbias.shape == (
                 self.VID_SIZE_Y,
                 self.VID_SIZE_X,
             ), "Provided center bias needs to match the size of the feature map!"
-            return featuremaps * centerbias
+            return  np.clip(featuremaps * centerbias, 0, None)
 
     def load_topdownmaps(self, videoname, normalized_std):
         """
@@ -416,10 +469,10 @@ class Dataset:
             assert len(vidlist) >= nframes, "Number of frames is too small!"
             vidlist = vidlist[:nframes]
 
-        for i in range(len(vidlist)):
-            img = vidlist[i]
-            img_resized = resize(img, (self.VID_SIZE_Y, self.VID_SIZE_X, 3), anti_aliasing=True)
-            vidlist[i] = (img_resized * 255).astype(np.uint8)
+        # for i in range(len(vidlist)):
+        #     img = vidlist[i]
+        #     img_resized = resize(img, (self.VID_SIZE_Y, self.VID_SIZE_X, 3), anti_aliasing=True)
+        #     vidlist[i] = (img_resized * 255).astype(np.uint8)
 
         assert vidlist[0].shape == (
             self.VID_SIZE_Y,
@@ -503,6 +556,52 @@ class Dataset:
                             full_dur += nframes / self.FPS * 1000  # unit is ms!
         return fov_dur / full_dur
 
+#human start positions
+    def load_human_start_positions(self):
+        """
+        Load human starting positions from the ground truth data.
+        
+        Returns:
+        --------
+        dict
+            Dictionary mapping scene names to dict of {'x': array, 'y': array}
+        """
+        if not hasattr(self, 'gt_foveation_df') or self.gt_foveation_df is None:
+            return {}
+        
+        df = self.gt_foveation_df
+        scene_col = 'scene'#self.NAME_COL
+        
+        start_positions = {}
+        
+        for scene in df[scene_col].unique():
+            scene_df = df[df[scene_col] == scene]
+            
+            # Find subject column
+            if 'subj_id' in scene_df.columns:
+                subj_col = 'subj_id'
+            elif 'subject' in scene_df.columns:
+                subj_col = 'subject'
+            else:
+                continue
+            
+            # Get first fixation per subject for this scene
+            first_fixes = scene_df.groupby(subj_col).first().reset_index()
+            
+            # Find coordinate columns
+            if 'x' in first_fixes.columns:
+                x_col, y_col = 'x', 'y'
+            elif 'x_start' in first_fixes.columns:
+                x_col, y_col = 'x_start', 'y_start'
+            else:
+                continue
+            
+            start_positions[scene] = {
+                'x': first_fixes[x_col].values,
+                'y': first_fixes[y_col].values
+            }
+        
+        return start_positions
 
     #######################################################################
     ##########                NOT YET IMPLEMENTED                ##########

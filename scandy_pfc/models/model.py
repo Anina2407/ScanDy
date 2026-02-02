@@ -87,17 +87,56 @@ class Model:
         )
 
         # Ensure 3D (frames, y, x)
-        if viddata.feature_maps.ndim == 2:  # only (y,x)
-            viddata.feature_maps = np.broadcast_to(
-                viddata.feature_maps,
-                (self.Dataset.video_frames[videoname], viddata.feature_maps.shape[0], viddata.feature_maps.shape[1])
-            )
+        # if viddata.feature_maps.ndim == 2:  # only (y,x)
+        #     viddata.feature_maps = np.broadcast_to(
+        #         viddata.feature_maps,
+        #         (self.Dataset.video_frames[videoname], viddata.feature_maps.shape[0], viddata.feature_maps.shape[1])
+        #     )
 
-        # Apply feature fade if requested
+        #fade
+        # Apply feature fade if requested (converge against 1)
+        # if self.params.get("feature_fade", False):
+        #     steps = np.linspace(1, 0, viddata.feature_maps.shape[0])    
+        #     viddata.feature_maps = viddata.feature_maps * steps[:, None, None] + 1 * (1 - steps[:, None, None])
+
+        #fade2_15/fade2_5
+        # ##with skip first 5 frames
+        # if self.params.get("feature_fade", False):
+        #     steps = np.ones(viddata.feature_maps.shape[0])
+        #     steps[5:] = np.linspace(1, 0, viddata.feature_maps.shape[0] - 5)  # Start fade at frame 15
+        #     viddata.feature_maps = viddata.feature_maps * steps[:, None, None] + 1 * (1 - steps[:, None, None])
+
+        ## with peak
         if self.params.get("feature_fade", False):
-            steps = np.linspace(1, 0, viddata.feature_maps.shape[0])
-            viddata.feature_maps = viddata.feature_maps * steps[:, None, None] + 1 * (1 - steps[:, None, None])
-
+            n_frames = viddata.feature_maps.shape[0]
+            t = np.arange(n_frames)
+            
+            # Parameters (can be optimized or set as defaults)
+            baseline = self.params.get("saliency_baseline", 0.0)      # Minimum influence
+            peak_value = self.params.get("saliency_peak", 1.0)        # Maximum influence  
+            peak_frame = self.params.get("saliency_peak_frame", 18)   # When peak occurs
+            rise_rate = self.params.get("saliency_rise_rate", 5.0)    # How fast it rises (smaller = faster)
+            fall_rate = self.params.get("saliency_fall_rate", 30.0)   # How fast it falls (smaller = faster)
+            
+            # Initialize with baseline
+            weights = np.ones(n_frames) * baseline
+            
+            # Rise phase: exponential rise to peak
+            rise_mask = (t < peak_frame)
+            if rise_mask.any():
+                weights[rise_mask] = baseline + (peak_value - baseline) * (
+                    1 - np.exp(-t[rise_mask] / rise_rate)
+                )
+            
+            # Fall phase: exponential decay from peak
+            fall_mask = (t >= peak_frame)
+            if fall_mask.any():
+                decay_time = t[fall_mask] - peak_frame
+                weights[fall_mask] = baseline + (peak_value - baseline) * np.exp(-decay_time / fall_rate)
+            
+            # Apply weights to feature maps
+            viddata.feature_maps = viddata.feature_maps * weights[:, None, None]
+        
         # Apply top-down modulation if requested
         topdown_mode = self.params.get("topdown_mode", None)
         if topdown_mode:
@@ -139,13 +178,14 @@ class Model:
         #if self.params.get("use_objectfiles", False):
         maxobj = int(np.max(viddata.object_masks))
         viddata.object_list = [ObjectFile(obj_id, viddata.object_masks) for obj_id in range(maxobj + 1)]
-
+         
         # Number of frames
         viddata.nframes = self.Dataset.video_frames[videoname]
 
         # Save to class
         self.video_data = viddata
 
+  
     @abstractmethod
     def reinit_for_sgl_run(self):
          """Reinitialize all variables that are used in the model run."""
@@ -241,6 +281,27 @@ class Model:
                     np.random.randint(0, self.Dataset.VID_SIZE_Y),
                 ]
             )
+        elif self.params["startpos"] == "human_sample":
+            # Sample from human starting positions
+            np.random.seed((seed + hash(videoname)) % (2**32))
+            
+            human_starts = self.Dataset.human_start_positions.get(videoname, None)
+            
+            if human_starts is None or len(human_starts['x']) == 0:
+                # Fallback to random if no data
+                self._gaze_loc = np.array(
+                [
+                    np.random.randint(0, self.Dataset.VID_SIZE_X),
+                    np.random.randint(0, self.Dataset.VID_SIZE_Y),
+                ]
+            )
+            else:
+                # Sample one random starting position
+                idx = np.random.randint(0, len(human_starts['x']))
+                x = np.clip(human_starts['x'][idx], 0, self.Dataset.VID_SIZE_X - 1)
+                y = np.clip(human_starts['y'][idx], 0, self.Dataset.VID_SIZE_Y - 1)
+                self._gaze_loc = np.array([x, y])
+            
         else:
             self._gaze_loc = self.params["startpos"].copy()
         self._scanpath.append(self._gaze_loc.copy())
@@ -286,8 +347,7 @@ class Model:
             # store when a saccade was made in list
             if self._new_target is not None:
                 fov_dur = self._t - fov_start_t - self._cur_waiting_time
-                # print(f"DEBUG: frame: {f}, time {self._t}, target {self._new_target}, fov_start_t {fov_start_t}, waiting time: {self._cur_waiting_time}, ongoing sacdur: {ongoing_sacdur}, cur fov frac: {self._cur_fov_frac}, fov_dur: {fov_dur}")
-                # nfov, frame_start, frame_end, fov_dur, x_start, y_start, x_end, y_end, sac_dur
+                
                 dfov_list.append(
                     [
                         nfov,
@@ -303,10 +363,12 @@ class Model:
                     ]
                 )
                 fov_start_loc = self._gaze_loc.copy()
+               
                 prev_sacamp = (
                     np.linalg.norm(self._gaze_loc - self._prev_gaze_loc)
                     * self.Dataset.PX_TO_DVA
                 )
+               
                 ongoing_sacdur = self.calc_sac_dur(prev_sacamp)
                 prev_sacdur = ongoing_sacdur.copy()
                 fov_start_t = fov_start_t + fov_dur + prev_sacdur

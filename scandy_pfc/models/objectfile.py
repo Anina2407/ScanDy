@@ -47,6 +47,22 @@ class ObjectFile:
             for f, apear in enumerate(self.appears_in)
         ]
 
+        #to make it scaling invariant, we adjust the multiplier with log(pxsize)
+
+        # we divide pxsize by the total number of pixels
+
+        self.rel_pxsize = np.array(self.pxsize,dtype=float)/(self.object_maps.shape[1]*self.object_maps.shape[2])
+
+        # but we want to preserve the behavior we got at the pixel size of 960x540 used in Roth et al., 2023,
+
+        # which is also close to the pixe size used in Nuthmann et al., 2020 (800x600)
+
+        self.CANONICAL_PIX = 960 * 540
+
+        # finally adjust the rel_pxsize with the canonical pixel size
+
+        self.equiv_pxsize = self.rel_pxsize * self.CANONICAL_PIX
+
     def set_initial_state(self):
         """
         Convenience function that resets the initial state.
@@ -131,11 +147,20 @@ class ObjectFile:
             if (model_params["topdown_mode"] == "detected_objects") and self.detected:
                 masked_feature_map *= topdown_map[self.object_maps[frame]]
             masked_sens_map = sens_map[self.object_maps[frame]]
-            pxsize_log = np.log(self.pxsize[frame])
-            scale_factor = (1 - self.ior) * pxsize_log / self.pxsize[frame]
+            #pxsize_log = np.log(self.pxsize[frame])
+            #scale_factor   = (1 - self.ior) * pxsize_log / self.pxsize[frame]
+            scale_factor = (1 - self.ior) * np.log(self.equiv_pxsize[frame]) / self.pxsize[frame]
 
             # Precompute scale factor, then apply element-wise multiplication
             mu = np.sum(masked_feature_map * masked_sens_map) * scale_factor
+            #evidence_sum = np.sum(masked_feature_map * masked_sens_map) * scale_factor
+            ## Recheck
+            # object_size = np.sum(self.object_maps[frame])  # Number of pixels in object
+            # if object_size > 0:
+            #     size_normalization = object_size ** 0.33
+            #     mu = evidence_sum / size_normalization  # Divide by sqrt to keep reasonable scale
+            # else:
+            #     mu = 0
 
             self.decision_variable += fov_frac * (
                 mu + np.random.normal(0, model_params["ddm_sig"])
@@ -173,10 +198,11 @@ class ObjectFile:
             mu = (
                 np.sum((self.object_maps[frame] * sens_map * (1 - ior_map) * feature_map))
                 / self.pxsize[frame]
-                * np.log(self.pxsize[frame])
+                #* np.log(self.pxsize[frame])
+                * np.log(self.equiv_pxsize[frame])
                 # * (1 - self.ior) # this is not needed anymore due to the ior_map
             )
-
+            
             self.decision_variable += fov_frac * (
                 mu + np.random.normal(0, model_params["ddm_sig"])
             )

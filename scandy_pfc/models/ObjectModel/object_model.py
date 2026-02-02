@@ -96,9 +96,6 @@ class ObjectModel(Model):
         # Choose the used feature map and whether a center bias should be used
         par.centerbias = "anisotropic_default"
         par.featuretype = "None"
-        # assert os.path.isdir(
-        #     f"{self.Dataset.featuremaps}{par.featuretype}/"
-        # ), f"No stored features at {self.Dataset.featuremaps}{par.featuretype}/"
         # Use top-down maps like PfC?
         par.topdown_mode = None  # None, "detected_objects", "ramp_map", "constant_map"
         par.topdown_std = 1.0
@@ -221,6 +218,7 @@ class ObjectModel(Model):
             dt_frac_sac = (max_dv - self.params["ddm_thres"]) / (
                 max_dv - prev_decision_objs[self._new_target]
             )
+ 
             self._cur_waiting_time = np.clip(dt_frac_sac, 0, 1) * self._dt
 
             # reset decision variables for all objects
@@ -252,7 +250,15 @@ class ObjectModel(Model):
                 * self.video_data["feature_maps"][self._current_frame]
                 * self._sens_map
             )
+            probmap = np.maximum(probmap, 0.0, None)  # remove negative values (can occure due resizing)
             probmapsum = np.sum(probmap)
+            if np.any(probmap < 0):
+                print("NEGATIVE VALUES DETECTED in probmap")
+                print("Min probmap:", np.min(probmap))
+                print("Max probmap:", np.max(probmap))
+                print("Sum probmap:", np.sum(probmap))
+                print("Sum before normalization:", probmapsum)
+                raise ValueError("probmap contains negative values")
             # draw new location from probability map
             # if features are all zero in the target (rare!) choose uniformly
             if np.isclose(probmapsum, 0):
@@ -287,7 +293,7 @@ class ObjectModel(Model):
         self._gaze_loc[0] = max(min(self._gaze_loc[0], self.Dataset.VID_SIZE_X - 1), 0)
         self._gaze_loc[1] = max(min(self._gaze_loc[1], self.Dataset.VID_SIZE_Y - 1), 0)
 
-    def write_sgl_output_gif(self, storagename, slowgif=False, dpi=100):
+    def write_sgl_output_gif_old(self, storagename, slowgif=False, dpi=100):
         """
         Visualize the single trial run and save it as a gif.
 
@@ -312,7 +318,6 @@ class ObjectModel(Model):
         runname = next(iter(self.result_dict[vidname]))
 
         vidlist = self.Dataset.load_videoframes(vidname)
-        print('Vidlist', len(vidlist))
         F_max = np.max(self.video_data["feature_maps"])
 
         @gif.frame
@@ -400,3 +405,185 @@ class ObjectModel(Model):
             gif.save(out, outputpath + ".gif", duration=33)
             print(f"Saved to {outputpath}.gif")
             # gif.save(out, f"videos/objvideo_{name}_{vidname}_thres_dv{thres_dv}_sig_dv{sig_dv}_ior_decay{ior_decay}_att_obj{att_obj}_att_dva{att_dva}_rs{rs}.gif", duration=33)
+
+    def write_sgl_output_gif(self, storagename, slowgif=False, dpi=100):
+        """
+        Visualize the single trial run and save it as a gif.
+
+        Illustrates what is happening in the 5 modules for each frame.
+
+        :param storagename: Name of the file, will be appended to outputpath +".gif"
+        :type storagename: str
+        :param slowgif: If true, store it with 10fps, otherwise 30fps, defaults to False
+        :type slowgif: bool, optional
+        :param dpi: DPI for each frame when created and stored gif, defaults to 100
+        :type dpi: int, optional
+        """
+        assert (
+            self.params.get("sglrun_return",False) == True
+        ), "`writeOutputVis` is only available for single trial runs!"
+        if hasattr(self.Dataset, "outputpath"):
+            outputpath = self.Dataset.outputpath + storagename
+        else:
+            outputpath = f"{self.Dataset.PATH}results/{storagename}"
+
+        vidname = next(iter(self.result_dict))
+        runname = next(iter(self.result_dict[vidname]))
+
+        vidlist = self.Dataset.load_videoframes(vidname)
+        F_max = np.max(self.video_data["feature_maps"])
+        
+        # PRE-COMPUTE evidence accumulation for ALL frames
+        n_frames = len(self._all_dvs)
+        n_objects = len(self.video_data["object_list"])
+        evidence_accumulation = np.zeros((n_frames, n_objects))
+        
+        for frame_idx in range(n_frames):
+            for obj_idx in range(n_objects):
+                if isinstance(self._all_dvs[frame_idx][obj_idx], np.ndarray):
+                    evidence_accumulation[frame_idx, obj_idx] = np.max(self._all_dvs[frame_idx][obj_idx])
+                else:
+                    evidence_accumulation[frame_idx, obj_idx] = self._all_dvs[frame_idx][obj_idx]
+        
+        # Define colors for plotting
+        colors = ['blue', 'orange', 'red', 'green', 'purple']
+        cmaps = ["Blues", "Oranges", "Reds", "Greens", "Purples"]
+
+        @gif.frame
+        def frame(f):
+            fig, axs = plt.subplots(2, 3, figsize=(12, 5), dpi=dpi)
+            
+            axs[0, 0].imshow(
+                self.video_data["feature_maps"][f], cmap="inferno", vmin=0
+            )
+            axs[0, 0].set_title("(I) Scene features")
+            
+            axs[0, 1].imshow(self._all_sens[f], cmap="bone", vmin=0, vmax=1)
+            axs[0, 1].set_title("(II) Visual sensitivity")
+            
+            axs[1, 0].imshow(vidlist[f + 1], alpha=0.5)
+            axs[1, 0].set_title(f"Video frame {f:03d}")
+        
+            IOR_map = np.ones_like(self.video_data["feature_maps"][f])
+            evidence_map = self.video_data["feature_maps"][f] * self._all_sens[f]
+            
+            for o in range(n_objects):
+                temp = self.video_data["object_list"][o].object_maps[f].copy() * 1.0
+                IOR_map = IOR_map - temp * self._all_iors[f][o]
+                temp[temp == 0] = np.nan
+                axs[1, 0].imshow(temp, cmap=cmaps[o % 5], vmin=0, vmax=1, alpha=0.5)
+                axs[1, 1].imshow(
+                    temp * self._all_dvs[f][o],
+                    cmap=cmaps[o % 5],
+                    vmin=0,
+                    vmax=self.params["ddm_thres"],
+                    alpha=0.6
+                )
+
+            axs[0, 2].imshow(IOR_map, cmap="bone", vmin=0, vmax=1)
+            axs[0, 2].set_title("(III) Scanpath history")
+            axs[1, 1].set_title("(IV) Decision making (spatial)")
+
+            # NEW: Evidence accumulation time series plot
+            ax_dv = axs[1, 2]
+            ax_dv.clear()
+            
+            # Plot DV traces for each object up to current frame
+            for o in range(n_objects):
+                ax_dv.plot(
+                    range(f + 1), 
+                    evidence_accumulation[:f + 1, o],
+                    color=colors[o % 5],
+                    linewidth=2,
+                    label=f'Obj {o}',
+                    marker='o' if f < 5 else None,
+                    markersize=4
+                )
+            
+            # Threshold line
+            ax_dv.axhline(
+                y=self.params["ddm_thres"], 
+                color='black', 
+                linestyle='--', 
+                linewidth=2,
+                label='Threshold',
+                zorder=1
+            )
+            
+            # Mark if any object reached threshold at current frame
+            for o in range(n_objects):
+                if evidence_accumulation[f, o] >= self.params["ddm_thres"]:
+                    ax_dv.scatter(
+                        f, 
+                        evidence_accumulation[f, o],
+                        s=200,
+                        facecolors='none',
+                        edgecolors=colors[o % 5],
+                        linewidths=3,
+                        marker='o',
+                        zorder=10
+                    )
+            
+            ax_dv.set_xlabel('Frame', fontsize=10)
+            ax_dv.set_ylabel('Decision Variable', fontsize=10)
+            ax_dv.set_title('(V) Evidence Accumulation', fontsize=11, fontweight='bold')
+            ax_dv.set_xlim(-0.5, n_frames - 0.5)
+            ax_dv.set_ylim(0, self.params["ddm_thres"] * 1.2)
+            ax_dv.legend(loc='upper left', fontsize=8, ncol=2)
+            ax_dv.grid(True, alpha=0.3)
+            ax_dv.spines['top'].set_visible(False)
+            ax_dv.spines['right'].set_visible(False)
+
+            # Add gaze position markers to all panels except the time series
+            for ax in [axs[0, 0], axs[0, 1], axs[0, 2], axs[1, 0], axs[1, 1]]:
+                ax.scatter(
+                    self.result_dict[vidname][runname]["gaze"][f][0],
+                    self.result_dict[vidname][runname]["gaze"][f][1],
+                    s=300,
+                    c="green",
+                    marker="x",
+                    lw=2,
+                )
+                ax.axis("off")
+            
+            # Next gaze position on spatial DV map
+            axs[1, 1].scatter(
+                self.result_dict[vidname][runname]["gaze"][f + 1][0],
+                self.result_dict[vidname][runname]["gaze"][f + 1][1],
+                s=300,
+                facecolors="none",
+                edgecolors="r",
+                marker="o",
+                lw=3,
+                alpha=0.75,
+            )
+
+            axs[1, 1].arrow(
+                self.result_dict[vidname][runname]["gaze"][f][0],
+                self.result_dict[vidname][runname]["gaze"][f][1],
+                self.result_dict[vidname][runname]["gaze"][f + 1][0]
+                - self.result_dict[vidname][runname]["gaze"][f][0],
+                self.result_dict[vidname][runname]["gaze"][f + 1][1]
+                - self.result_dict[vidname][runname]["gaze"][f][1],
+                head_width=15,
+                head_length=15,
+                fc="k",
+                ec="k",
+                lw=2,
+                alpha=0.75,
+                length_includes_head=True,
+            )
+            
+            fig.set_facecolor("lightgrey")
+            plt.tight_layout()
+
+        out = [frame(i) for i in range(min(61, n_frames))]
+        
+        if slowgif:
+            gif.save(out, outputpath + "_slow.gif", duration=100)
+            print(f"Saved to {outputpath}_slow.gif")
+        else:
+            gif.save(out, outputpath + ".gif", duration=33)
+            print(f"Saved to {outputpath}.gif")
+
+   
