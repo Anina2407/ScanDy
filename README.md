@@ -1,4 +1,4 @@
-This repository collects my work of the LabRotation in the Neural Information Processing Group in Berlin by Prof. Obermayer (TU Berlin) and is based on and includes code from the original project: https://github.com/rederoth/ScanDy - Framework ScanDy from Nicolas Roth (Roth et al., 2023). <br>
+This repository collects my work of the LabRotation in the Neural Information Processing Group in Berlin by Prof. Obermayer (TU Berlin) and is based on and includes code from the original project: ![Framework ScanDy from Nicolas Roth (Roth et al., 2023)](https://github.com/rederoth/ScanDy). <br>
 I used the original framework but adapted at for images usage and solved logical and reusability issues. 
 
 
@@ -9,7 +9,7 @@ I used the original framework but adapted at for images usage and solved logical
 
 ## Dataset
 
-The used and preprocessed eyetracking data can be found in: https://github.com/Anina2407/ScanDy/tree/main/PictureExample/PictureExample_Resized/parkinson_data
+The used and preprocessed eyetracking data can be found in: ![Pictures](https://github.com/Anina2407/ScanDy/tree/main/PictureExample/PictureExample_Resized/parkinson_data)<br>
 Describtion of preprocessing can be found local under data\parkinson_data and is described in my report under preprocessing.
 
 ## Result structure
